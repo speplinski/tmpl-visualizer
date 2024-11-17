@@ -28,7 +28,7 @@ fi
 TMPL_BASE_URL="https://storage.googleapis.com/polish_landscape/dataset"
 TMPL_images_SPN="simulation_spn_white-dunes_0145_s580"
 TMPL_images_SPN_url="${TMPL_BASE_URL}/${TMPL_images_SPN}.7z"
-DATASET_DIR="tmpl"
+DATASET_DIR="./"
 
 echo -e "${SEPARATOR}"
 echo -e "${YELLOW}Creating images directory...${NC}"
