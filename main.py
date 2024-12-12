@@ -47,6 +47,9 @@ class Application:
             1280
         )
 
+        self.loop_mode = True
+        self.sequence_starting = False
+
     def handle_events(self):
         event = sdl2.SDL_Event()
         while sdl2.SDL_PollEvent(ctypes.byref(event)):
@@ -159,6 +162,10 @@ class Application:
 
     def _handle_video_playback(self):
         if self.video_player.video_finished:
+            if True:
+                self._cleanup_video()
+                self._reset_sequence()
+                return
             self.running = False
             return
 
@@ -176,9 +183,30 @@ class Application:
             self.video_player.texture = self.video_player.get_next_frame_texture()
             sdl2.SDL_DestroyTexture(old_texture)
 
-            if self.video_player.texture is None:
-                print("End of video or error getting next frame")
-                self.video_player.video_finished = True
+    def _cleanup_video(self):
+        if self.video_player:
+            self.video_player.video_finished = True
+            self.video_player = None
+        if self.white_transition:
+            sdl2.SDL_DestroyTexture(self.white_transition)
+            self.white_transition = None
+
+    def _reset_sequence(self):
+        self.video_mode_started = False
+        self.is_fading = False
+        self.fade_completed = False
+        self.frame_in_sequence = 0
+        self.interpolated_frames = []
+        self.stats = PlaybackStatistics()
+
+        self.sequence_player = ImageSequencePlayer(self.config, self.texture_manager) 
+        self.sequence_player.start_loader_thread(self.config.sequence_start_frame)
+
+        while self.sequence_player.frame_buffer.empty():
+            time.sleep(0.1)
+    
+        _, self.current_texture = self.sequence_player.frame_buffer.get()
+        self.last_full_frame_texture = self.current_texture
 
     def _handle_image_sequence(self):
         current_time = time.time()
