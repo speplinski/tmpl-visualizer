@@ -1,9 +1,27 @@
 class Config:
     """Configuration class storing all constants and settings"""
     def __init__(self):
-        self.image_directory = "results/tmpl/"
-        self.overlay_path = "results/overlay.png"
-        self.video_path = "results/0145.mp4"
+        self.sequences = [
+            {
+                'id': '0145',
+                'image_directory': 'results/sequences/0145/',
+                'overlay_path': 'results/overlays/0145.png',
+                'video_path': 'results/movies/0145.mp4'
+            },
+            {
+                'id': '0200',
+                'image_directory': 'results/sequences/0200/',
+                'overlay_path': 'results/overlays/0200.png',
+                'video_path': 'results/movies/0200.mp4'
+            },
+            {
+                'id': '0400',
+                'image_directory': 'results/sequences/0400/',
+                'overlay_path': 'results/overlays/0400.png',
+                'video_path': 'results/movies/0400.mp4'
+            }
+        ]
+        self.current_sequence_index = 0
 
         self.final_resolution = (3840, 2160)
         self.final_resolution_model = (3840, 1280)
@@ -25,5 +43,12 @@ class Config:
 
         # Video starts at frame 200 OR after 15 seconds
         self.video_trigger_frame = 200  # Frame to start video
-        self.video_trigger_time = 15.0  # Time (seconds) to start video
+        self.video_trigger_time = 5.0  # Time (seconds) to start video
         self.fade_duration = 2.0
+
+    def get_current_sequence(self):
+        return self.sequences[self.current_sequence_index]
+
+    def next_sequence(self):
+        self.current_sequence_index = (self.current_sequence_index + 1) % len(self.sequences)
+        return self.get_current_sequence()

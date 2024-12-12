@@ -55,3 +55,11 @@ class ImageSequencePlayer:
                     time.sleep(0.5)
 
             time.sleep(0.001)
+
+    def set_directory(self, new_directory):
+        with self.buffer_lock:
+            # Clear existing buffer
+            while not self.frame_buffer.empty():
+                _, texture = self.frame_buffer.get()
+                sdl2.SDL_DestroyTexture(texture)
+        self.config.image_directory = new_directory

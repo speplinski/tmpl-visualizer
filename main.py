@@ -97,8 +97,9 @@ class Application:
         self._cleanup()
 
     def _initialize(self):
+        current_seq = self.config.get_current_sequence()
         self.overlay_texture = self.texture_manager.load_image(
-            self.config.overlay_path,
+            current_seq['overlay_path'],
             self.config.final_resolution,
             keep_aspect=True
         )
@@ -106,6 +107,7 @@ class Application:
         if not self.overlay_texture:
             raise Exception("Failed to create overlay texture")
 
+        self.sequence_player.set_directory(current_seq['image_directory'])
         self.sequence_player.start_loader_thread(self.config.sequence_start_frame)
 
         while self.sequence_player.frame_buffer.empty():
@@ -133,10 +135,11 @@ class Application:
                 self.video_mode_started = False
                 self.stats = PlaybackStatistics()
             else:
+                current_seq = self.config.get_current_sequence()
                 self.fade_completed = True
                 self._cleanup_image_resources()
                 self.white_transition = self.transition_manager.create_white_transition_texture()
-                self.video_player = VideoPlayer(self.config.video_path, self.sdl_app.renderer)
+                self.video_player = VideoPlayer(current_seq['video_path'], self.sdl_app.renderer)
                 self.video_mode_started = True
 
     def _cleanup_fade_textures(self):
@@ -198,23 +201,38 @@ class Application:
             self.video_player = None
         if self.white_transition:
             sdl2.SDL_DestroyTexture(self.white_transition)
-        
+
+        # Switch to next sequence
+        next_seq = self.config.next_sequence()
+
         return white_transition
 
     def _reset_sequence_with_transition(self, white_transition):
+        current_seq = self.config.get_current_sequence()
+
+        # Update overlay
+        if self.overlay_texture:
+            sdl2.SDL_DestroyTexture(self.overlay_texture)
+        self.overlay_texture = self.texture_manager.load_image(
+            current_seq['overlay_path'],
+            self.config.final_resolution,
+            keep_aspect=True
+        )
+
         self.white_transition = white_transition
         self.fade_completed = False
         self.frame_in_sequence = 0
-    
+
         self.sequence_player = ImageSequencePlayer(self.config, self.texture_manager)
+        self.sequence_player.set_directory(current_seq['image_directory'])
         self.sequence_player.start_loader_thread(self.config.sequence_start_frame)
-    
+
         self._render_white_screen()
-    
+
         while self.sequence_player.frame_buffer.empty():
             self._render_white_screen()
             time.sleep(0.1)
-    
+
         _, self.current_texture = self.sequence_player.frame_buffer.get()
         self.last_full_frame_texture = self.current_texture
         self.fade_textures = self.transition_manager.create_fade_from_white(
