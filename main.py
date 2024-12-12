@@ -116,7 +116,6 @@ class Application:
 
     def _handle_fade_transition(self, current_time):
         if not self.fade_textures:
-            print("Error: Fade textures not prepared!")
             self.is_fading = False
             return
 
@@ -124,24 +123,27 @@ class Application:
         frame_index = min(int(progress * len(self.fade_textures)), len(self.fade_textures) - 1)
 
         if frame_index < len(self.fade_textures):
-            sdl2.SDL_RenderCopy(
-                self.sdl_app.renderer,
-                self.fade_textures[frame_index],
-                None,
-                None
-            )
+            sdl2.SDL_RenderCopy(self.sdl_app.renderer, self.fade_textures[frame_index], None, None)
 
         if progress >= 1.0:
-            print("Fade completed, transitioning to video mode")
             self.is_fading = False
-            self.fade_completed = True
-            self._cleanup_image_resources()
+            self._cleanup_fade_textures()
 
-            self.white_transition = self.transition_manager.create_white_transition_texture()
-            print("White transition texture created")
+            if self.video_mode_started:
+                self.video_mode_started = False
+                self.stats = PlaybackStatistics()
+            else:
+                self.fade_completed = True
+                self._cleanup_image_resources()
+                self.white_transition = self.transition_manager.create_white_transition_texture()
+                self.video_player = VideoPlayer(self.config.video_path, self.sdl_app.renderer)
+                self.video_mode_started = True
 
-            self.video_player = VideoPlayer(self.config.video_path, self.sdl_app.renderer)
-            self.video_mode_started = True
+    def _cleanup_fade_textures(self):
+        if self.fade_textures:
+            for texture in self.fade_textures:
+                sdl2.SDL_DestroyTexture(texture)
+            self.fade_textures = None
 
     def _handle_white_transition(self):
         sdl2.SDL_RenderClear(self.sdl_app.renderer)
@@ -163,11 +165,9 @@ class Application:
     def _handle_video_playback(self):
         if self.video_player.video_finished:
             if True:
-                self._cleanup_video()
-                self._reset_sequence()
+                last_white = self._cleanup_video()
+                self._reset_sequence_with_transition(last_white)
                 return
-            self.running = False
-            return
 
         if self.video_player.texture:
             ret = sdl2.SDL_RenderCopy(
@@ -183,30 +183,46 @@ class Application:
             self.video_player.texture = self.video_player.get_next_frame_texture()
             sdl2.SDL_DestroyTexture(old_texture)
 
+    def _render_white_screen(self):
+        sdl2.SDL_SetRenderDrawColor(self.sdl_app.renderer, 0, 0, 0, 255)
+        sdl2.SDL_RenderClear(self.sdl_app.renderer)
+        sdl2.SDL_RenderCopy(self.sdl_app.renderer, self.white_transition, None, self.dest_rect)
+        sdl2.SDL_RenderPresent(self.sdl_app.renderer)
+
     def _cleanup_video(self):
+        # Keep white screen
+        white_transition = self.transition_manager.create_white_transition_texture()
+    
         if self.video_player:
             self.video_player.video_finished = True
             self.video_player = None
         if self.white_transition:
             sdl2.SDL_DestroyTexture(self.white_transition)
-            self.white_transition = None
+        
+        return white_transition
 
-    def _reset_sequence(self):
-        self.video_mode_started = False
-        self.is_fading = False
+    def _reset_sequence_with_transition(self, white_transition):
+        self.white_transition = white_transition
         self.fade_completed = False
         self.frame_in_sequence = 0
-        self.interpolated_frames = []
-        self.stats = PlaybackStatistics()
-
-        self.sequence_player = ImageSequencePlayer(self.config, self.texture_manager) 
+    
+        self.sequence_player = ImageSequencePlayer(self.config, self.texture_manager)
         self.sequence_player.start_loader_thread(self.config.sequence_start_frame)
-
+    
+        self._render_white_screen()
+    
         while self.sequence_player.frame_buffer.empty():
+            self._render_white_screen()
             time.sleep(0.1)
     
         _, self.current_texture = self.sequence_player.frame_buffer.get()
         self.last_full_frame_texture = self.current_texture
+        self.fade_textures = self.transition_manager.create_fade_from_white(
+            self.current_texture,
+            self.overlay_texture
+        )
+        self.is_fading = True
+        self.fade_start_time = time.time()
 
     def _handle_image_sequence(self):
         current_time = time.time()
